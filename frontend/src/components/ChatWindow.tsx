@@ -1,16 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import type { Persona, Message } from '../types';
 import { MessageBubble } from './MessageBubble';
-import { Image as ImageIcon, Smile } from 'lucide-react';
+import { Image as ImageIcon, Smile, Trash2 } from 'lucide-react';
 
 interface ChatWindowProps {
   persona: Persona;
   messages: Message[];
   onSendMessage: (text: string) => void;
   isTyping?: boolean;
+  onClearHistory?: () => void;
 }
 
-export function ChatWindow({ persona, messages, onSendMessage, isTyping }: ChatWindowProps) {
+export function ChatWindow({ persona, messages, onSendMessage, isTyping, onClearHistory }: ChatWindowProps) {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -41,7 +42,9 @@ export function ChatWindow({ persona, messages, onSendMessage, isTyping }: ChatW
       {/* Header */}
       <div className="h-16 border-b border-gray-200 flex items-center px-4 bg-[#f5f5f5] justify-between">
         <h2 className="text-lg font-medium text-gray-900">{persona.name}</h2>
-        <div className="text-gray-400 cursor-pointer">...</div>
+        <div className="text-gray-400 cursor-pointer hover:text-red-500" onClick={onClearHistory} title="清空聊天记录">
+          <Trash2 className="w-5 h-5" />
+        </div>
       </div>
 
       {/* Messages Area */}

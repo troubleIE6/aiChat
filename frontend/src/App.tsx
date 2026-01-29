@@ -1,31 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import type { Persona, Message } from './types';
 import { personas } from './data/personas';
-import { generateResponse } from './services/api';
+import { getMessageHistory, saveMessage, clearHistory, generateResponse } from './services/api';
 
 function App() {
   const [selectedPersona, setSelectedPersona] = useState<Persona>(personas[0]);
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [isTyping, setIsTyping] = useState(false);
 
-  const handleSelectPersona = (persona: Persona) => {
+  const handleSelectPersona = async (persona: Persona) => {
     setSelectedPersona(persona);
+    if (!messages[persona.id]) {
+      const history = await getMessageHistory(persona.id);
+      setMessages((prev) => ({
+        ...prev,
+        [persona.id]: history,
+      }));
+    }
   };
+
+  // Initial load
+  useEffect(() => {
+     handleSelectPersona(selectedPersona);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendMessage = async (text: string) => {
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: Date.now().toString(), // Temporary ID for UI
       sender: 'user',
       content: text,
       timestamp: Date.now(),
     };
 
+    // Optimistic update
     setMessages((prev) => ({
       ...prev,
       [selectedPersona.id]: [...(prev[selectedPersona.id] || []), newMessage],
     }));
+    
+    // Save to backend
+    await saveMessage(selectedPersona.id, newMessage);
 
     setIsTyping(true);
 
@@ -44,10 +60,23 @@ function App() {
         ...prev,
         [selectedPersona.id]: [...(prev[selectedPersona.id] || []), aiMessage],
       }));
+      
+      // Save AI response to backend
+      await saveMessage(selectedPersona.id, aiMessage);
     } catch (error) {
       console.error("Failed to generate response:", error);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (confirm('确定要清空与该角色的聊天记录吗？')) {
+      await clearHistory(selectedPersona.id);
+      setMessages((prev) => ({
+        ...prev,
+        [selectedPersona.id]: [],
+      }));
     }
   };
 
@@ -66,6 +95,7 @@ function App() {
           messages={currentMessages} 
           onSendMessage={handleSendMessage} 
           isTyping={isTyping}
+          onClearHistory={handleClearHistory}
         />
       </div>
     </div>
