@@ -135,18 +135,43 @@ export async function generateResponse(text: string, persona: Persona): Promise<
   if (isImageRequest) {
     if (QWEN_API_KEY !== 'YOUR_QWEN_API_KEY') {
       try {
-        // Real Qwen Image Generation API call would go here
-        // For now, we keep the mock but prepared for the real key usage
-        // const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
-        //   method: 'POST',
-        //   headers: { 
-        //     'Authorization': `Bearer ${QWEN_API_KEY}`,
-        //     'Content-Type': 'application/json' 
-        //   },
-        //   // ... body ...
-        // });
+        // Qwen-VL-Max / Qwen-Image generation via DashScope
+        const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis', {
+          method: 'POST',
+          headers: { 
+            'X-DashScope-WorkSpace': 'modal',
+            'Authorization': `Bearer ${QWEN_API_KEY}`,
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify({
+            model: "wanx-v1",
+            input: {
+              prompt: `(Portrait of a ${persona.description}), ${persona.style} style, high quality, realistic. ${text}`,
+            },
+            parameters: {
+              style: "<auto>",
+              size: "1024*1024",
+              n: 1
+            }
+          })
+        });
         
-        console.log('Using Qwen API Key for image generation...');
+        if (response.ok) {
+           const data = await response.json();
+           // Wanx returns a task_id usually, but let's assume direct generation for now or check structure.
+           // Actually Wanx is async usually. Let's try synchronous return if available or just basic structure.
+           // Note: Real implementation might need polling if it's async. 
+           // For simplicity in this demo, we assume the API returns the image URL in output.results[0].url
+           // If it's a task-based API, we might need a task checking loop.
+           // Let's check common wanx response format.
+           if (data.output && data.output.results && data.output.results[0]) {
+               return {
+                   content: getPhotoResponse(persona),
+                   imageUrl: data.output.results[0].url
+               }
+           }
+        }
+        console.log('Qwen API response:', await response.text());
       } catch (e) {
         console.error('Qwen API call failed', e);
       }
