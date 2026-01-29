@@ -122,22 +122,75 @@ const mockResponses: Record<string, string[]> = {
   ],
 };
 
+// Configuration for API Keys - REPLACE WITH YOUR KEYS
+const DEEPSEEK_API_KEY = 'YOUR_DEEPSEEK_API_KEY';
+const QWEN_API_KEY = 'YOUR_QWEN_API_KEY';
+
 export async function generateResponse(text: string, persona: Persona): Promise<AIResponse> {
-  await delay(1000 + Math.random() * 2000); // Simulate network latency
+  // await delay(1000 + Math.random() * 2000); // Simulate network latency
 
   // Check if image generation is requested
   const isImageRequest = text.includes('照片') || text.includes('图片') || text.includes('看看你') || text.includes('自拍');
   
   if (isImageRequest) {
+    if (QWEN_API_KEY !== 'YOUR_QWEN_API_KEY') {
+      try {
+        // Real Qwen Image Generation API call would go here
+        // For now, we keep the mock but prepared for the real key usage
+        // const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
+        //   method: 'POST',
+        //   headers: { 
+        //     'Authorization': `Bearer ${QWEN_API_KEY}`,
+        //     'Content-Type': 'application/json' 
+        //   },
+        //   // ... body ...
+        // });
+        
+        console.log('Using Qwen API Key for image generation...');
+      } catch (e) {
+        console.error('Qwen API call failed', e);
+      }
+    }
+
     return {
       content: getPhotoResponse(persona),
       imageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${persona.style}-${Date.now()}`, 
     };
   }
 
-  // TODO: Replace with real API call to DeepSeek
-  // const response = await fetch('https://api.deepseek.com/chat/completions', ...);
+  if (DEEPSEEK_API_KEY !== 'YOUR_DEEPSEEK_API_KEY') {
+    try {
+      const response = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}` 
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: persona.systemPrompt },
+            { role: 'user', content: text }
+          ],
+          stream: false
+        })
+      });
 
+      if (response.ok) {
+        const data = await response.json();
+        const aiContent = data.choices[0]?.message?.content;
+        if (aiContent) {
+          return { content: aiContent };
+        }
+      } else {
+        console.error('DeepSeek API error:', await response.text());
+      }
+    } catch (error) {
+      console.error('Failed to call DeepSeek API:', error);
+    }
+  }
+
+  // Fallback to mock responses if API key is not set or call fails
   const responses = mockResponses[persona.style] || ["收到。"];
   const randomResponse = responses[Math.floor(Math.random() * responses.length)];
   
