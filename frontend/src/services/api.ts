@@ -50,9 +50,6 @@ export async function clearHistory(personaId: string): Promise<void> {
   }
 }
 
-// Simulated API delay for AI generation
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Mock responses based on persona style (fallback/demo logic)
 // In a real app, this would be replaced by actual calls to DeepSeek/Qwen APIs
 const mockResponses: Record<string, string[]> = {
@@ -123,8 +120,8 @@ const mockResponses: Record<string, string[]> = {
 };
 
 // Configuration for API Keys - REPLACE WITH YOUR KEYS
-const DEEPSEEK_API_KEY = 'YOUR_DEEPSEEK_API_KEY';
-const QWEN_API_KEY = 'YOUR_QWEN_API_KEY';
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
+const QWEN_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY;
 
 export async function generateResponse(text: string, persona: Persona): Promise<AIResponse> {
   // await delay(1000 + Math.random() * 2000); // Simulate network latency
@@ -133,20 +130,35 @@ export async function generateResponse(text: string, persona: Persona): Promise<
   const isImageRequest = text.includes('照片') || text.includes('图片') || text.includes('看看你') || text.includes('自拍');
   
   if (isImageRequest) {
-    if (QWEN_API_KEY !== 'YOUR_QWEN_API_KEY') {
+    if (QWEN_API_KEY) {
       try {
-        // Real Qwen Image Generation API call would go here
-        // For now, we keep the mock but prepared for the real key usage
-        // const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation', {
-        //   method: 'POST',
-        //   headers: { 
-        //     'Authorization': `Bearer ${QWEN_API_KEY}`,
-        //     'Content-Type': 'application/json' 
-        //   },
-        //   // ... body ...
-        // });
+        const baseUrl = import.meta.env.VITE_DASHSCOPE_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1';
+        const response = await fetch(`${baseUrl}/images/generations`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${QWEN_API_KEY}`,
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify({
+            model: 'wanx-v1',
+            prompt: `一个${persona.name}风格的自拍照，${persona.systemPrompt}，背景自然`,
+            n: 1,
+            size: '1024*1024'
+          })
+        });
         
-        console.log('Using Qwen API Key for image generation...');
+        if (response.ok) {
+          const data = await response.json();
+          const imageUrl = data.data?.[0]?.url;
+          if (imageUrl) {
+            return {
+              content: getPhotoResponse(persona),
+              imageUrl: imageUrl,
+            };
+          }
+        } else {
+          console.error('Qwen Image API error:', await response.text());
+        }
       } catch (e) {
         console.error('Qwen API call failed', e);
       }
@@ -158,9 +170,10 @@ export async function generateResponse(text: string, persona: Persona): Promise<
     };
   }
 
-  if (DEEPSEEK_API_KEY !== 'YOUR_DEEPSEEK_API_KEY') {
+  if (DEEPSEEK_API_KEY) {
     try {
-      const response = await fetch('https://api.deepseek.com/chat/completions', {
+      const baseUrl = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+      const response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
