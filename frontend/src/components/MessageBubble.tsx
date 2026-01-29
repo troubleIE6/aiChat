@@ -35,6 +35,12 @@ export function MessageBubble({ message, avatar }: MessageBubbleProps) {
           {message.content}
         </p>
         
+        {message.audioUrl && (
+          <div className="mt-2">
+            <audio controls src={message.audioUrl} className="max-w-full h-8" />
+          </div>
+        )}
+        
         {message.imageUrl && (
           <img 
             src={message.imageUrl} 

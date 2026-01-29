@@ -13,4 +13,5 @@ export interface Message {
   content: string;
   timestamp: number;
   imageUrl?: string; // For generated images
+  audioUrl?: string; // For TTS audio
 }

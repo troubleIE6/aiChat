@@ -46,13 +46,16 @@ function App() {
     setIsTyping(true);
 
     try {
-      const response = await generateResponse(text, selectedPersona);
+      // Pass the current messages as history (limiting to last 15 for context efficiency)
+      const history = (messages[selectedPersona.id] || []).slice(-15);
+      const response = await generateResponse(text, selectedPersona, history);
       
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
         content: response.content,
         imageUrl: response.imageUrl,
+        audioUrl: response.audioUrl,
         timestamp: Date.now(),
       };
 

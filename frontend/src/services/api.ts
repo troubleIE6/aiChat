@@ -3,8 +3,10 @@ import type { Persona, Message } from '../types';
 interface AIResponse {
   content: string;
   imageUrl?: string;
+  audioUrl?: string;
 }
 
+// Configuration for API Keys - Handled by Backend Proxy
 const API_BASE_URL = 'http://localhost:3001/api';
 
 // Fetch history from backend
@@ -119,109 +121,75 @@ const mockResponses: Record<string, string[]> = {
   ],
 };
 
-// Configuration for API Keys - REPLACE WITH YOUR KEYS
-const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
-const QWEN_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY;
+export async function generateResponse(text: string, persona: Persona, history: Message[] = []): Promise<AIResponse> {
+  // 1. 首先调用 Chat API 获取 AI 回复文字
+  let aiContent = "";
+  try {
+    const apiMessages = [
+      { role: 'system', content: persona.systemPrompt },
+      ...history.map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      })),
+      { role: 'user', content: text }
+    ];
 
-export async function generateResponse(text: string, persona: Persona): Promise<AIResponse> {
-  // await delay(1000 + Math.random() * 2000); // Simulate network latency
+    const chatResponse = await fetch(`${API_BASE_URL}/ai/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: apiMessages
+      })
+    });
 
-  // Check if image generation is requested
-  const isImageRequest = text.includes('照片') || text.includes('图片') || text.includes('看看你') || text.includes('自拍');
-  
-  if (isImageRequest) {
-    if (QWEN_API_KEY) {
-      try {
-        // Qwen-VL-Max / Qwen-Image generation via DashScope
-        const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis', {
-          method: 'POST',
-          headers: { 
-            'X-DashScope-WorkSpace': 'modal',
-            'Authorization': `Bearer ${QWEN_API_KEY}`,
-            'Content-Type': 'application/json' 
-          },
-          body: JSON.stringify({
-            model: "wanx-v1",
-            input: {
-              prompt: `(Portrait of a ${persona.description}), ${persona.style} style, high quality, realistic. ${text}`,
-            },
-            parameters: {
-              style: "<auto>",
-              size: "1024*1024",
-              n: 1
-            }
-          })
-        });
-        
-        if (response.ok) {
-           const data = await response.json();
-           if (data.output && data.output.results && data.output.results[0]) {
-               return {
-                   content: getPhotoResponse(persona),
-                   imageUrl: data.output.results[0].url
-               }
-           }
-        }
-        console.log('Qwen API response:', await response.text());
-      } catch (e) {
-        console.error('Qwen API call failed', e);
-      }
+    if (chatResponse.ok) {
+      const data = await chatResponse.json();
+      aiContent = data.choices?.[0]?.message?.content || "";
     }
-
-    return {
-      content: getPhotoResponse(persona),
-      imageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${persona.style}-${Date.now()}`, 
-    };
+  } catch (error) {
+    console.error('Chat API call failed:', error);
   }
 
-  if (DEEPSEEK_API_KEY) {
+  // 如果文字生成失败，回退到 Mock 数据
+  if (!aiContent) {
+    const responses = mockResponses[persona.style] || ["收到。"];
+    aiContent = responses[Math.floor(Math.random() * responses.length)];
+  }
+
+  // 2. 判断是否需要合成语音
+  const isVoiceRequest = text.includes('语音') || text.includes('听听') || text.includes('说话') || text.includes('声音') || text.includes('发声');
+  let audioUrl = undefined;
+
+  if (isVoiceRequest && aiContent) {
     try {
-      const baseUrl = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-      const response = await fetch(`${baseUrl}/chat/completions`, {
+      // 这里的 text 使用上面刚刚由 AI 生成的内容，不再使用死代码
+      const ttsResponse = await fetch(`${API_BASE_URL}/ai/tts`, {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json', 
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}` 
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: persona.systemPrompt },
-            { role: 'user', content: text }
-          ],
-          stream: false
+          text: aiContent, // 使用真实的 AI 回复内容
+          model: "qwen3-tts-flash"
         })
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        const aiContent = data.choices[0]?.message?.content;
-        if (aiContent) {
-          return { content: aiContent };
-        }
+      
+      if (ttsResponse.ok) {
+        const data = await ttsResponse.json();
+        audioUrl = data.audioUrl;
       } else {
-        console.error('DeepSeek API error:', await response.text());
+        console.error('Backend TTS API error:', await ttsResponse.text());
       }
-    } catch (error) {
-      console.error('Failed to call DeepSeek API:', error);
+    } catch (e) {
+      console.error('Backend TTS API call failed', e);
     }
   }
 
-  // Fallback to mock responses if API key is not set or call fails
-  const responses = mockResponses[persona.style] || ["收到。"];
-  const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-  
+  // 3. 返回最终结果
   return {
-    content: randomResponse,
+    content: aiContent,
+    audioUrl: audioUrl
   };
 }
 
-function getPhotoResponse(persona: Persona): string {
-  switch (persona.style) {
-    case 'spirit_girl': return "给你看看我的新摇摆！";
-    case 'mature_sister': return "想看姐姐了吗？呐~";
-    case 'loli': return "哥哥你看，好看吗？";
-    case 'straight_man': return "发个照片。";
-    default: return "这是我的照片。";
-  }
-}
+// 移除不再需要的 getVoiceResponse 函数
+
