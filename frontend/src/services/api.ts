@@ -50,9 +50,6 @@ export async function clearHistory(personaId: string): Promise<void> {
   }
 }
 
-// Simulated API delay for AI generation
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Mock responses based on persona style (fallback/demo logic)
 // In a real app, this would be replaced by actual calls to DeepSeek/Qwen APIs
 const mockResponses: Record<string, string[]> = {
@@ -123,8 +120,8 @@ const mockResponses: Record<string, string[]> = {
 };
 
 // Configuration for API Keys - REPLACE WITH YOUR KEYS
-const DEEPSEEK_API_KEY = 'YOUR_DEEPSEEK_API_KEY';
-const QWEN_API_KEY = 'YOUR_QWEN_API_KEY';
+const DEEPSEEK_API_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY;
+const QWEN_API_KEY = import.meta.env.VITE_DASHSCOPE_API_KEY;
 
 export async function generateResponse(text: string, persona: Persona): Promise<AIResponse> {
   // await delay(1000 + Math.random() * 2000); // Simulate network latency
@@ -133,7 +130,7 @@ export async function generateResponse(text: string, persona: Persona): Promise<
   const isImageRequest = text.includes('照片') || text.includes('图片') || text.includes('看看你') || text.includes('自拍');
   
   if (isImageRequest) {
-    if (QWEN_API_KEY !== 'YOUR_QWEN_API_KEY') {
+    if (QWEN_API_KEY) {
       try {
         // Qwen-VL-Max / Qwen-Image generation via DashScope
         const response = await fetch('https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis', {
@@ -158,12 +155,6 @@ export async function generateResponse(text: string, persona: Persona): Promise<
         
         if (response.ok) {
            const data = await response.json();
-           // Wanx returns a task_id usually, but let's assume direct generation for now or check structure.
-           // Actually Wanx is async usually. Let's try synchronous return if available or just basic structure.
-           // Note: Real implementation might need polling if it's async. 
-           // For simplicity in this demo, we assume the API returns the image URL in output.results[0].url
-           // If it's a task-based API, we might need a task checking loop.
-           // Let's check common wanx response format.
            if (data.output && data.output.results && data.output.results[0]) {
                return {
                    content: getPhotoResponse(persona),
@@ -183,9 +174,10 @@ export async function generateResponse(text: string, persona: Persona): Promise<
     };
   }
 
-  if (DEEPSEEK_API_KEY !== 'YOUR_DEEPSEEK_API_KEY') {
+  if (DEEPSEEK_API_KEY) {
     try {
-      const response = await fetch('https://api.deepseek.com/chat/completions', {
+      const baseUrl = import.meta.env.VITE_DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+      const response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
